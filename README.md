@@ -117,7 +117,7 @@ The plugin uses a modular architecture with separate concerns:
 
 ## API Integration
 
-SpeedSync communicates with the backend API at `http://speedsync.pl/api` for:
+SpeedSync communicates with the backend API:
 
 - User authentication and registration
 - Lap data persistence

@@ -1,0 +1,32 @@
+import ctypes
+
+class SPageFileGraphic(ctypes.Structure):
+    _fields_ = [
+        ('packetId', ctypes.c_int),
+        ('status', ctypes.c_int),
+        ('session', ctypes.c_int),
+        ('currentTime', ctypes.c_wchar * 15),
+        ('lastTime', ctypes.c_wchar * 15),
+        ('bestTime', ctypes.c_wchar * 15),
+        ('split', ctypes.c_wchar * 15),
+        ('completedLaps', ctypes.c_int),
+        ('position', ctypes.c_int),
+        ('currentTimeMS', ctypes.c_int),
+        ('lastTimeMS', ctypes.c_int),
+        ('bestTimeMS', ctypes.c_int),
+        ('sessionTimeLeft', ctypes.c_float),
+        ('distanceTraveled', ctypes.c_float),
+        ('isInPit', ctypes.c_int),
+        ('currentSectorIndex', ctypes.c_int),
+        ('lastSectorTime', ctypes.c_int),
+        ('numberOfLaps', ctypes.c_int),
+        ('tyreCompound', ctypes.c_wchar * 33),
+        ('replayTimeMultiplier', ctypes.c_float),
+        ('normalizedCarPosition', ctypes.c_float),
+        ('carCoordinates', ctypes.c_float * 3),
+        ('penaltyTime', ctypes.c_float),
+        ('flag', ctypes.c_int),
+        ('idealLineOn', ctypes.c_int),
+        ('isInPitLane', ctypes.c_int),
+        ('surfaceType', ctypes.c_int * 4),
+    ]

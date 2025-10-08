@@ -35,7 +35,7 @@ from graphic import SPageFileGraphic
 
 # Constants
 API_CONFIG = {
-    'base_url': 'http://speedsync.pl/api',
+    'base_url': 'https://speedsync.pl/api',
     'api_key': None,
     'username': None,
     'password': None

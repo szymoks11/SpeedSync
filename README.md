@@ -21,7 +21,7 @@ The plugin runs directly within Assetto Corsa, capturing detailed telemetry data
 ## Features
 
 **⏱️ Real-time Sector Tracking**  
-Automatic detection and recording of sector times with support for up to 3 sectors per track. Track both session-best and all-time best sector times.
+Automatic detection and recording of sector times. Track both session-best and all-time best sector times.
 
 **🏆 Theoretical Best Calculation**  
 Automatically calculates your theoretical best lap time by combining your best sector times, showing you exactly how much time you can gain.
@@ -45,7 +45,7 @@ SpeedSync is designed to work seamlessly with Assetto Corsa's plugin system.
 ### Installing the plugin
 
 1. Download the latest release
-2. Extract the `SpeedSync` folder to your Assetto Corsa apps directory:
+2. Extract the `SpeedSync` folder to your Assetto Corsa apps directory
 3. Launch Assetto Corsa and enable the plugin from the apps menu
 
 ### First-time setup

@@ -2,7 +2,7 @@
 
 <p align="center">
   <picture>
-    <img alt="SpeedSync" src="http://speedsync.pl/github/banner.jpg">
+    <img alt="SpeedSync" src="https://speedsync.pl/static/img/banner.png">
   </picture>
 </p>
 
@@ -16,7 +16,7 @@
 
 Whether you're a casual sim racer or a competitive driver, tracking your performance is essential. SpeedSync makes it effortless to collect, analyze, and improve your lap times with real-time sector tracking and cloud synchronization.
 
-The plugin runs directly within Assetto Corsa, capturing detailed telemetry data including lap times, sector splits, and theoretical best times. All data is automatically synchronized with the SpeedSync API at [speedsync.pl](http://speedsync.pl), allowing you to track your progress across sessions and compare performance.
+The plugin runs directly within Assetto Corsa, capturing detailed telemetry data including lap times, sector splits, and theoretical best times. All data is automatically synchronized with the SpeedSync API at [speedsync.pl](https://speedsync.pl), allowing you to track your progress across sessions and compare performance.
 
 ## Features
 
@@ -79,7 +79,7 @@ The SpeedSync app displays real-time information:
 
 ### Viewing Your Stats
 
-All your telemetry data is synchronized to your SpeedSync account at [speedsync.pl](http://speedsync.pl), where you can:
+All your telemetry data is synchronized to your SpeedSync account at [speedsync.pl](https://speedsync.pl), where you can:
 
 - View detailed lap history and analysis
 - Compare performance across different sessions and tracks
@@ -136,7 +136,7 @@ SpeedSync is open source software. See the license file for more information.
 
 ## Support
 
-For questions, bug reports, or feature requests, please visit [speedsync.pl](http://speedsync.pl) or contact the development team.
+For questions, bug reports, or feature requests, please visit [speedsync.pl](https://speedsync.pl) or contact the development team.
 
 ---
 

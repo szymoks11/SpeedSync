@@ -28,7 +28,7 @@ import time
 import ctypes
 import mmap
 import hashlib
-
+import base64
 # Local imports
 from physics import SPageFilePhysics
 from graphic import SPageFileGraphic
@@ -186,7 +186,6 @@ class APIClient:
         except Exception as e:
             log("API connection test failed: {}".format(e))
             return False
-
 # =============================================================================
 # AUTHENTICATION SYSTEM
 # =============================================================================
@@ -214,31 +213,76 @@ class AuthManager:
             return False, None, "Connection error"
     
     @staticmethod
-    def create_user(username, email, password):
-        """Create user via API"""
+    def _get_machine_id():
+        """Generate a machine-specific identifier"""
         try:
-            data = {'username': username, 'email': email, 'password': password}
-            response, status = APIClient.make_request('/auth/register', 'POST', data, require_auth=False)
-            
-            if status in [201, 200] and response.get('status') == 'success':
-                log("User '{}' created via API".format(username))
-                return True, "User created successfully"
-            else:
-                error_msg = response.get('error', 'Registration failed')
-                log("API registration failed: {}".format(error_msg))
-                return False, error_msg
-                
-        except Exception as e:
-            log("create_user error: {}".format(e))
-            return False, "Connection error"
+            # Combine multiple system-specific values
+            machine_info = "{}{}{}".format(
+                platform.node(),  # Computer name
+                platform.machine(),  # Machine type
+                os.environ.get('USERNAME', os.environ.get('USER', 'default'))  # Username
+            )
+            return hashlib.sha256(machine_info.encode('utf-8')).digest()
+        except:
+            # Fallback to a default if anything fails
+            return hashlib.sha256(b'SpeedSyncAC_Default').digest()
     
+    @staticmethod
+    def _xor_cipher(data, key):
+        """Simple XOR cipher for encryption/decryption"""
+        key_length = len(key)
+        return bytes(b ^ key[i % key_length] for i, b in enumerate(data))
+    
+    @staticmethod
+    def encrypt_password(password):
+        """Encrypt password for local storage using machine-specific key"""
+        try:
+            # Use machine-specific key
+            cipher_key = AuthManager._get_machine_id()
+            password_bytes = password.encode('utf-8')
+            
+            # Add random salt for additional security
+            salt = os.urandom(8)
+            data_to_encrypt = salt + password_bytes
+            
+            encrypted = AuthManager._xor_cipher(data_to_encrypt, cipher_key)
+            return base64.b64encode(encrypted).decode('utf-8')
+        except Exception as e:
+            log("Error encrypting password: {}".format(e))
+            return None
+    
+    @staticmethod
+    def decrypt_password(encrypted_password):
+        """Decrypt password from local storage using machine-specific key"""
+        try:
+            cipher_key = AuthManager._get_machine_id()
+            encrypted_bytes = base64.b64decode(encrypted_password)
+            
+            decrypted = AuthManager._xor_cipher(encrypted_bytes, cipher_key)
+            
+            # Remove salt (first 8 bytes)
+            password_bytes = decrypted[8:]
+            return password_bytes.decode('utf-8')
+        except Exception as e:
+            log("Error decrypting password: {}".format(e))
+            return None
+
     @staticmethod
     def save_login_data(username, password, remember=True):
         """Save login credentials to file"""
         try:
+            log("Starting save_login_data for user: {}".format(username))
+            
+            encrypted_password = AuthManager.encrypt_password(password)
+            if not encrypted_password:
+                log("Failed to encrypt password")
+                return None
+            
+            log("Password encrypted successfully")
+            
             login_data = {
                 'username': username,
-                'password': password,
+                'password_encrypted': encrypted_password,
                 'api_key': API_CONFIG.get('api_key'),
                 'remember': remember
             }
@@ -248,28 +292,60 @@ class AuthManager:
                 os.path.join(tempfile.gettempdir(), "ac_SpeedSync_login.json")
             ]
             
+            log("Attempting to save to paths: {}".format(possible_paths))
+            
             for login_file_path in possible_paths:
                 try:
                     abs_path = os.path.abspath(login_file_path)
+                    dir_path = os.path.dirname(abs_path)
                     
-                    if not os.access(os.path.dirname(abs_path), os.W_OK):
+                    log("Checking path: {}".format(abs_path))
+                    log("Directory: {}".format(dir_path))
+                    
+                    # Check if directory exists and is writable
+                    if not os.path.exists(dir_path):
+                        log("Directory does not exist: {}".format(dir_path))
+                        continue
+                        
+                    if not os.access(dir_path, os.W_OK):
+                        log("Directory not writable: {}".format(dir_path))
                         continue
                     
+                    # Write the file
                     with open(abs_path, 'w', encoding='utf-8') as f:
                         json.dump(login_data, f, indent=2, ensure_ascii=False)
                     
+                    log("File written to: {}".format(abs_path))
+                    
+                    # Verify the file was created
                     if os.path.exists(abs_path):
                         file_size = os.path.getsize(abs_path)
-                        log("Login data saved: {} (size: {} bytes)".format(abs_path, file_size))
+                        log("Login data saved successfully: {} (size: {} bytes)".format(abs_path, file_size))
+                        
+                        # Verify content
+                        with open(abs_path, 'r', encoding='utf-8') as f:
+                            verify_data = json.load(f)
+                            log("Verified data keys: {}".format(verify_data.keys()))
+                        
                         return abs_path
+                    else:
+                        log("File not found after writing: {}".format(abs_path))
+                        
                 except Exception as e:
-                    log("Failed to save to {}: {}".format(login_file_path, e))
+                    log("Failed to save to {}: {} - {}".format(login_file_path, type(e).__name__, e))
+                    import traceback
+                    log("Traceback: {}".format(traceback.format_exc()))
                     continue
+            
+            log("ERROR: Failed to save to any location")
+            return None
                     
         except Exception as e:
-            log("ERROR saving login data: {}".format(e))
+            log("ERROR in save_login_data: {} - {}".format(type(e).__name__, e))
+            import traceback
+            log("Traceback: {}".format(traceback.format_exc()))
             return None
-    
+
     @staticmethod
     def load_login_data():
         """Load saved login credentials"""
@@ -288,12 +364,38 @@ class AuthManager:
                 if os.path.exists(abs_path):
                     with open(abs_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                    log("Login data loaded from: {}".format(abs_path))
-                    return data
+                    
+                    # Decrypt password if present
+                    if 'password_encrypted' in data and data['password_encrypted']:
+                        decrypted = AuthManager.decrypt_password(data['password_encrypted'])
+                        if decrypted:
+                            data['password'] = decrypted
+                            log("Login data loaded and decrypted from: {}".format(abs_path))
+                            return data
+                        else:
+                            log("Failed to decrypt password from: {}".format(abs_path))
+                            # Return None so user has to re-login
+                            return None
+                    else:
+                        # Handle legacy plain-text password
+                        log("Login data loaded from: {}".format(abs_path))
+                        return data
             except Exception as e:
                 log("Failed to load login data from {}: {}".format(login_file_path, e))
         
         log("No login data found in any location")
+        return None
+
+    @staticmethod
+    def get_decrypted_credentials():
+        """Get decrypted username and password for auto-login"""
+        data = AuthManager.load_login_data()
+        if data and data.get('remember'):
+            return {
+                'username': data.get('username'),
+                'password': data.get('password'),
+                'api_key': data.get('api_key')
+            }
         return None
     
     @staticmethod
@@ -321,7 +423,6 @@ class AuthManager:
         
         if not cleared_any:
             log("No login data files found to clear")
-
 # =============================================================================
 # SESSION AND TIMING MANAGEMENT
 # =============================================================================

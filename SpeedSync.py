@@ -1,8 +1,11 @@
 """
-Assetto Corsa Lap Statistics Plugin
+SpeedSync | Assetto Corsa Lap Statistics Plugin - Version 1.1
 Tracks lap times, sector times, and theoretical best times via API integration.
+Author: Szymon Flis
+Version: 1.0.2
+License: MIT
+Repository: https://github.com/szymoks11/SpeedSync
 """
-
 import sys
 import os
 import platform
@@ -942,30 +945,6 @@ def on_login_click(*args):
         log("Error in login click handler: {}".format(e))
         ac.setText(app_state.login_status_label, "Login error occurred")
 
-def on_register_click(*args):
-    """Handle register button click"""
-    try:
-        username = ac.getText(app_state.username_input)
-        password = ac.getText(app_state.password_input)
-        
-        if not username or not password:
-            ac.setText(app_state.login_status_label, "Please enter username and password")
-            return
-        
-        email = "{}@racing.local".format(username)
-        success, message = AuthManager.create_user(username, email, password)
-        
-        if success:
-            ac.setText(app_state.login_status_label, "Registration successful! Please login.")
-            log("User '{}' registered successfully".format(username))
-        else:
-            ac.setText(app_state.login_status_label, message)
-            log("Registration failed: {}".format(message))
-            
-    except Exception as e:
-        log("Error in register click handler: {}".format(e))
-        ac.setText(app_state.login_status_label, "Registration error occurred")
-
 def on_logout_click(*args):
     """Handle logout button click"""
     try:
@@ -1010,8 +989,7 @@ def update_login_ui():
         if app_state.is_logged_in:
             # Hide login elements
             for element in [app_state.username_input, app_state.password_input, 
-                          app_state.login_button, app_state.register_button, 
-                          app_state.remember_me_checkbox]:
+                          app_state.login_button, app_state.remember_me_checkbox]:
                 ac.setVisible(element, 0)
             
             # Show logout elements
@@ -1020,13 +998,12 @@ def update_login_ui():
         else:
             # Show login elements
             for element in [app_state.username_input, app_state.password_input, 
-                          app_state.login_button, app_state.register_button, 
-                          app_state.remember_me_checkbox]:
+                          app_state.login_button, app_state.remember_me_checkbox]:
                 ac.setVisible(element, 1)
             
             # Hide logout elements
             ac.setVisible(app_state.logout_button, 0)
-            ac.setText(app_state.login_status_label, "Please login or register")
+            ac.setText(app_state.login_status_label, "Please login")
             
     except Exception as e:
         log("Error updating login UI: {}".format(e))
@@ -1055,7 +1032,7 @@ def create_login_window():
         
         # Create window
         app_state.login_window = ac.newApp("SpeedSync Login")
-        ac.setSize(app_state.login_window, 300, 280)
+        ac.setSize(app_state.login_window, 300, 250)
         ac.setTitle(app_state.login_window, "SpeedSync Login")
         
         # Create UI elements
@@ -1088,23 +1065,18 @@ def create_login_window():
             app_state.remember_me_state = False
             ac.setValue(app_state.remember_me_checkbox, 0)
         
-        # Create buttons
+        # Create login button (centered: window is 300px wide, button is 100px, so (300-100)/2 = 100)
         app_state.login_button = ac.addButton(app_state.login_window, "Login")
-        ac.setPosition(app_state.login_button, 50, 120)
-        ac.setSize(app_state.login_button, 80, 30)
+        ac.setPosition(app_state.login_button, 100, 120)
+        ac.setSize(app_state.login_button, 100, 30)
         ac.addOnClickedListener(app_state.login_button, on_login_click)
-        
-        app_state.register_button = ac.addButton(app_state.login_window, "Register")
-        ac.setPosition(app_state.register_button, 150, 120)
-        ac.setSize(app_state.register_button, 80, 30)
-        ac.addOnClickedListener(app_state.register_button, on_register_click)
         
         app_state.logout_button = ac.addButton(app_state.login_window, "Logout")
         ac.setPosition(app_state.logout_button, 100, 160)
         ac.setSize(app_state.logout_button, 100, 30)
         ac.addOnClickedListener(app_state.logout_button, on_logout_click)
         
-        app_state.login_status_label = ac.addLabel(app_state.login_window, "Please login or register")
+        app_state.login_status_label = ac.addLabel(app_state.login_window, "Please login")
         ac.setPosition(app_state.login_status_label, 10, 200)
         ac.setSize(app_state.login_status_label, 280, 40)
         

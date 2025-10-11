@@ -2,10 +2,11 @@
 SpeedSync | Assetto Corsa Lap Statistics Plugin - Version 1.1
 Tracks lap times, sector times, and theoretical best times via API integration.
 Author: Szymon Flis
-Version: 1.0.2
+Version: 1.0.3
 License: MIT
 Repository: https://github.com/szymoks11/SpeedSync
 """
+
 import sys
 import os
 import platform
@@ -93,6 +94,11 @@ class AppState:
         # Threading
         self.lap_queue = queue.Queue()
         self.worker_thread = None
+
+        # Password masking
+        self.actual_password = ""  # Store real password
+        self.password_cursor_pos = 0
+        self.last_password_display = ""
 
 
 # Global app state instance
@@ -913,11 +919,46 @@ def lap_worker():
 # UI EVENT HANDLERS
 # =============================================================================
 
+def mask_password_input():
+    """Mask password input with stars"""
+    try:
+        current_display = ac.getText(app_state.password_input)
+        
+        # If text was cleared, reset actual password
+        if not current_display:
+            app_state.actual_password = ""
+            app_state.last_password_display = ""
+            return
+        
+        # If display text is all stars, don't process (already masked)
+        if current_display == '*' * len(current_display):
+            return
+        
+        # If text changed (user typed something)
+        if current_display != app_state.last_password_display:
+            # Handle backspace/deletion
+            if len(current_display) < len(app_state.last_password_display):
+                chars_removed = len(app_state.last_password_display) - len(current_display)
+                app_state.actual_password = app_state.actual_password[:-chars_removed]
+            else:
+                # New characters added
+                new_chars = current_display.replace('*', '')
+                if new_chars:
+                    app_state.actual_password += new_chars
+            
+            # Update display with stars
+            masked_display = '*' * len(app_state.actual_password)
+            ac.setText(app_state.password_input, masked_display)
+            app_state.last_password_display = masked_display
+            
+    except Exception as e:
+        log("Error in mask_password_input: {}".format(e))
+
 def on_login_click(*args):
     """Handle login button click"""
     try:
         username = ac.getText(app_state.username_input)
-        password = ac.getText(app_state.password_input)
+        password = app_state.actual_password  # Use actual password, not masked display
         
         if not username or not password:
             ac.setText(app_state.login_status_label, "Please enter username and password")
@@ -960,6 +1001,8 @@ def on_logout_click(*args):
         
         ac.setText(app_state.username_input, "")
         ac.setText(app_state.password_input, "")
+        app_state.actual_password = ""  # Clear actual password
+        app_state.last_password_display = ""  # Reset masking state
         app_state.remember_me_state = False
         ac.setValue(app_state.remember_me_checkbox, 0)
         
@@ -1141,14 +1184,23 @@ def acMain(ac_version):
 def acUpdate(deltaT):
     """Main update loop"""
     try:
+        # Password masking - only when not logged in
+        if not app_state.is_logged_in:
+            try:
+                mask_password_input()
+            except Exception as e:
+                log("Error in password masking: {}".format(e))
+        
+        # Timer-based updates (0.5 second intervals)
         app_state.timer += deltaT
         if app_state.timer < 0.5:
             return
         
         app_state.timer = 0
-        carId = ac.getFocusedCar()
         
+        # Get car and session data
         try:
+            carId = ac.getFocusedCar()
             lap_count = ac.getCarState(carId, acsys.CS.LapCount)
             last_lap_time = ac.getCarState(carId, acsys.CS.LastLap)
             raw_car_name = ac.getCarName(carId)
@@ -1158,6 +1210,7 @@ def acUpdate(deltaT):
             log("Error getting car state: {}".format(e))
             return
         
+        # Clean names for display
         try:
             car_name = DataCollector.clean_name(raw_car_name) if raw_car_name else "Unknown"
             track_name = DataCollector.format_track_name(raw_track_name, track_layout) if raw_track_name else "Unknown"
@@ -1172,15 +1225,16 @@ def acUpdate(deltaT):
             app_state.best_times_loaded = True
             log("Skipping historical best times loading - using session-only theoretical best calculation")
         
-        # Initialize physics memory
+        # Initialize physics memory mapping
         if app_state.mmf_physics is None:
             try:
                 app_state.mmf_physics = mmap.mmap(-1, ctypes.sizeof(SPageFilePhysics), SHM_NAME_PHYSICS)
+                log("Physics memory mapping initialized successfully")
             except Exception as e:
                 log("Could not initialize physics memory: {}".format(e))
                 return
         
-        # Read physics data
+        # Read physics data from shared memory
         try:
             if app_state.mmf_physics is not None:
                 app_state.mmf_physics.seek(0)
@@ -1188,6 +1242,7 @@ def acUpdate(deltaT):
                 if buffer is not None:
                     physics_data = SPageFilePhysics.from_buffer_copy(buffer)
                 else:
+                    log("Warning: Physics buffer is None")
                     return
             else:
                 return
@@ -1195,19 +1250,24 @@ def acUpdate(deltaT):
             log("Could not read physics data: {}".format(e))
             return
         
-        graphics_data = DataCollector.get_graphics_data()
+        # Get graphics data (includes sector information)
+        try:
+            graphics_data = DataCollector.get_graphics_data()
+        except Exception as e:
+            log("Error getting graphics data: {}".format(e))
+            graphics_data = {"tyre_compound": "Unknown", "currentSectorIndex": -1, "lastSectorTime": 0}
         
-        # Track sector progress (this now updates best times immediately)
+        # Track sector progress (updates best times immediately when sectors complete)
         try:
             SectorTracker.track_sector_progress(graphics_data, lap_count)
         except Exception as e:
             log("Error tracking sector progress: {}".format(e))
         
-        # Check for lap invalidation
+        # Check for lap invalidation (3+ tyres off track)
         try:
             if hasattr(physics_data, 'numberOfTyresOut') and physics_data.numberOfTyresOut >= 3:
                 if not app_state.lap_invalid_flag:
-                    log("Lap marked invalid due to off-track (3 tyres out).")
+                    log("Lap {} marked invalid due to off-track (3+ tyres out)".format(lap_count))
                 app_state.lap_invalid_flag = True
         except Exception as e:
             log("Error checking lap invalidation: {}".format(e))
@@ -1215,24 +1275,34 @@ def acUpdate(deltaT):
         # Handle lap completion
         if lap_count > app_state.last_lap_count and app_state.last_lap_count != -1:
             try:
-                if app_state.lap_invalid_flag:
-                    log("Completed INVALID lap: {}".format(app_state.last_lap_count))
-                else:
-                    log("Completed valid lap: {}".format(app_state.last_lap_count))
+                completed_lap = app_state.last_lap_count
                 
-                SectorTracker.handle_lap_completion(app_state.last_lap_count, graphics_data)
+                # Log lap completion status
+                if app_state.lap_invalid_flag:
+                    log("Completed INVALID lap: {} (time: {}ms)".format(completed_lap, last_lap_time))
+                else:
+                    log("Completed VALID lap: {} (time: {}ms)".format(completed_lap, last_lap_time))
+                
+                # Process final sector for completed lap
+                SectorTracker.handle_lap_completion(completed_lap, graphics_data)
                 
                 # Get final sector times for the completed lap
-                sector_times = SectorTracker.get_sector_times_for_lap(app_state.last_lap_count)
+                sector_times = SectorTracker.get_sector_times_for_lap(completed_lap)
                 
-                # Debug: Show current session best times before queueing
-                log("Current session best times before queueing: {}".format(app_state.session_best_sector_times))
+                # Debug logging: Show current session state
+                log("Lap {} completion - Session best sectors: {}".format(
+                    completed_lap, app_state.session_best_sector_times))
+                
                 current_theoretical = SessionManager.get_session_theoretical_best()
-                log("Current session theoretical best before queueing: {}ms".format(current_theoretical or 'None'))
+                if current_theoretical:
+                    log("Current session theoretical best: {}ms ({:.3f}s)".format(
+                        current_theoretical, current_theoretical / 1000.0))
+                else:
+                    log("Current session theoretical best: Not yet available")
                 
-                # Queue the lap data
-                app_state.lap_queue.put({
-                    "lap_number": app_state.last_lap_count,
+                # Queue the lap data for background processing
+                lap_data = {
+                    "lap_number": completed_lap,
                     "lap_time_ms": last_lap_time,
                     "track_name": track_name,
                     "car_name": car_name,
@@ -1240,14 +1310,24 @@ def acUpdate(deltaT):
                     "raw_car_name": raw_car_name,
                     "car_id": carId,
                     "lap_invalid": app_state.lap_invalid_flag
-                })
+                }
                 
+                app_state.lap_queue.put(lap_data)
+                log("Lap {} queued for API submission (Sectors: {})".format(
+                    completed_lap, len(sector_times)))
+                
+                # Reset invalid flag for next lap
                 app_state.lap_invalid_flag = False
                 
             except Exception as e:
-                log("Error handling lap completion: {}".format(e))
+                log("Error handling lap completion for lap {}: {}".format(app_state.last_lap_count, e))
+                import traceback
+                log("Traceback: {}".format(traceback.format_exc()))
         
+        # Update last lap count for next iteration
         app_state.last_lap_count = lap_count
         
     except Exception as e:
         log("Critical error in acUpdate: {}".format(e))
+        import traceback
+        log("Critical error traceback: {}".format(traceback.format_exc()))
